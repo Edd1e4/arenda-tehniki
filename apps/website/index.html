@@ -17,14 +17,52 @@
 <article class="card"><h3>JCB 3CX</h3><p>Экскаватор-погрузчик</p><p>Земляные и погрузочные работы. Комплектацию и навесное оборудование уточняем под задачу.</p><a href="#request" data-equipment="JCB 3CX">Запросить расчёт →</a></article>
 <article class="card"><h3>Bobcat S185</h3><p>Мини-погрузчик</p><p>Погрузка и планировка</p><p>Габариты и навесное оборудование уточняются при расчёте.</p><a href="#request" data-equipment="Bobcat S185">Запросить расчёт →</a></article>
 </div></section>
-<section id="contacts"><h2>Связаться с нами</h2><div class="contact-actions"><a class="button" href="tel:+79151124212">Позвонить: +7 (915) 112-42-12</a><a class="button secondary" href="https://wa.me/79151124212">Написать в WhatsApp</a></div><p>Рабочие часы: 08:00–18:00 по московскому времени.</p><p class="muted">Также можно связаться в Telegram и MAX по номеру +7 (915) 112-42-12. Прямые ссылки на профили добавим позже.</p></section><section id="request"><h2>Расскажите о задаче</h2><p>Демонстрационная форма: данные не отправляются и не сохраняются. Приём заказов ещё не подключён.</p>
+<section id="contacts"><h2>Связаться с нами</h2><div class="contact-actions"><a class="button" href="tel:+79151124212">Позвонить: +7 (915) 112-42-12</a><a class="button secondary" href="https://wa.me/79151124212">Написать в WhatsApp</a></div><p>Рабочие часы: 08:00–18:00 по московскому времени.</p><p class="muted">Также можно связаться в Telegram и MAX по номеру +7 (915) 112-42-12. Прямые ссылки на профили добавим позже.</p></section><section id="request"><h2>Расскажите о задаче</h2><p>Заполните условия — мы подготовим текст заявки. Проверьте его и откройте WhatsApp, чтобы отправить сообщение диспетчеру. До этого данные остаются только на этой странице.</p>
 <form id="form"><label>Техника<select name="equipment"><option>Нужна помощь с выбором</option><option>Ford Transit</option><option>Volkswagen Caddy</option><option>Манипулятор</option><option>JCB 3CX</option><option>Bobcat S185</option></select></label>
 <label>Адрес погрузки или работ<input name="address" required maxlength="300" autocomplete="street-address"></label>
 <label>Адрес доставки (для перевозки)<input name="destination" maxlength="300" autocomplete="off"></label>
 <label>Желаемая дата<input name="date" type="date" required></label>
+<label>Желаемое время (Москва)<input name="time" type="time" min="08:00" max="18:00"></label>
+<label>Общий вес груза, кг (если известен)<input name="weight" type="number" min="0.1" step="any" inputmode="decimal"></label>
 <label>Что нужно сделать<textarea name="task" required maxlength="2000" rows="4" placeholder="Груз, вес, размеры, длительность, условия подъезда"></textarea></label>
-<button type="submit">Проверить заполнение</button><p id="result" role="status" aria-live="polite"></p></form></section>
+<button type="submit">Подготовить заявку</button><p id="result" role="status" aria-live="polite"></p><div id="draft-panel" hidden><label>Текст заявки<textarea id="draft" rows="10" readonly></textarea></label><p>Нажатие кнопки передаст текст в WhatsApp. Для отправки нажмите «Отправить» в самом мессенджере. Стоимость и наличие техники подтверждает диспетчер.</p><a id="send-whatsapp" class="button" href="https://wa.me/79151124212">Открыть заявку в WhatsApp</a></div></form></section>
 <section><h2>Как проходит заказ</h2><p>Заявка → уточнение условий → расчёт и согласование стоимости → подтверждение заказа. СМС-подтверждение появится после подключения сервиса.</p></section>
 </main><footer>Аренда24 МО · Москва и область · 08:00–18:00</footer>
-<script>document.querySelectorAll('[data-equipment]').forEach(function(link){link.addEventListener('click',function(){document.querySelector('select[name="equipment"]').value=link.dataset.equipment;});});document.getElementById('form').addEventListener('submit',function(event){event.preventDefault();document.getElementById('result').textContent='Поля заполнены. Это демонстрация: заявка не отправлена. Связь с диспетчером будет подключена позже.';});</script>
+<script>
+const form=document.getElementById('form');
+const result=document.getElementById('result');
+const panel=document.getElementById('draft-panel');
+const send=document.getElementById('send-whatsapp');
+function isTransport(name){return name==='Ford Transit'||name==='Volkswagen Caddy';}
+function buildRequest(values){
+ const weight=values.weight?Number(values.weight):null;
+ if(isTransport(values.equipment)&&!values.destination.trim())return {error:'Укажите адрес доставки для перевозки.'};
+ if(values.equipment==='Volkswagen Caddy'&&weight>500)return {error:'Вес превышает 500 кг. Выберите Ford Transit или помощь с выбором.'};
+ if(values.equipment==='Ford Transit'&&weight>2000)return {error:'Вес превышает 2 т. Выберите помощь с выбором для отдельного расчёта.'};
+ const date=values.date.split('-').reverse().join('.');
+ const lines=['Заявка с сайта Аренда24 МО','Техника: '+values.equipment,'Адрес погрузки / работ: '+values.address.trim()];
+ if(values.destination.trim())lines.push('Адрес доставки: '+values.destination.trim());
+ lines.push('Дата: '+date,'Время (Москва): '+(values.time||'согласовать'));
+ if(weight)lines.push('Общий вес: '+weight+' кг');
+ lines.push('Задача: '+values.task.trim(),'Прошу рассчитать стоимость и подтвердить наличие техники.');
+ return {text:lines.join('\n')};
+}
+function invalidateDraft(){panel.hidden=true;send.removeAttribute('href');document.getElementById('draft').value='';result.textContent='';}
+function updateDestination(){form.elements.destination.required=isTransport(form.elements.equipment.value);}
+form.addEventListener('input',invalidateDraft);
+form.addEventListener('change',function(){invalidateDraft();updateDestination();});
+document.querySelectorAll('[data-equipment]').forEach(function(link){link.addEventListener('click',function(){form.elements.equipment.value=link.dataset.equipment;invalidateDraft();updateDestination();});});
+form.addEventListener('submit',function(event){
+ event.preventDefault();
+ if(!form.reportValidity())return;
+ const values=Object.fromEntries(new FormData(form));
+ const built=buildRequest(values);
+ if(built.error){invalidateDraft();result.textContent=built.error;return;}
+ document.getElementById('draft').value=built.text;
+ send.href='https://wa.me/79151124212?text='+encodeURIComponent(built.text);
+ panel.hidden=false;
+ result.textContent='Заявка подготовлена, но ещё не отправлена. Проверьте текст ниже.';
+});
+updateDestination();
+</script>
 </html>
