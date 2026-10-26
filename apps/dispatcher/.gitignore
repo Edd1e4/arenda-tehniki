@@ -5,3 +5,5 @@
 
 data/
 test-data-*/
+
+!.env.telegram.example
