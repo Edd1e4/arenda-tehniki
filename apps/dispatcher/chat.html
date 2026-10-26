@@ -13,8 +13,8 @@ get('form').onsubmit=async event=>{
  const response=await fetch('/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages:[...history,{role:'user',content}]})});
  const data=await response.json();if(!response.ok)throw new Error(data.error||'Ошибка сервера.');
  history.push({role:'user',content},{role:'assistant',content:data.reply});add('user',content);add('assistant',data.reply);get('message').value='';
- const labels={cargo:'Груз',pickup:'Откуда',dropoff:'Куда',date:'Дата',time:'Время (Москва)',dimensions:'Размеры и места',contact:'Контакт',weightKg:'Вес, кг'};
- get('summary').textContent=Object.entries(labels).map(([key,label])=>label+': '+(data.summary[key]??'не уточнено')).join('\n')+'\nКандидат по весу: '+(data.suggestedVehicle||'не определён')+'\nМаршрут, габариты, цена и наличие требуют проверки человеком.';
+ const labels={cargo:'Груз',pickup:'Откуда',dropoff:'Куда',date:'Дата',time:'Время (Москва)',dimensions:'Размеры и места',contact:'Контакт',weightKg:'Вес, кг',pieceCount:'Количество мест'};
+ get('summary').textContent=Object.entries(labels).map(([key,label])=>label+': '+(data.summary[key]||'не уточнено')).join('\n')+'\nКандидат по весу: '+(data.suggestedVehicle||'не определён')+'\nМаршрут, габариты, цена и наличие требуют проверки человеком.';
  get('draft').hidden=false;get('status').textContent='Ответ получен. Заявка не отправлена.';
  }catch(e){get('error').textContent=e.message;get('status').textContent='Ответ не получен. Текст сохранён в поле — можно повторить.';}
  finally{get('submit').disabled=false;get('reset').disabled=false;get('message').focus();}

@@ -3,15 +3,26 @@ export function reviewIntake(input = {}, { today } = {}) {
   const missing = [];
   const questions = {
     cargo: 'Что нужно перевезти?',
-    pickup: 'Откуда забрать груз?',
-    dropoff: 'Куда доставить груз?',
+    pickup: 'Укажите точный адрес погрузки: населённый пункт, улицу и номер дома.',
+    dropoff: 'Укажите точный адрес доставки: населённый пункт, улицу и номер дома.',
     date: 'На какую дату нужна машина?',
     time: 'К какому времени нужна подача по Москве?',
-    dimensions: 'Какие размеры самого крупного места и сколько мест?',
+    dimensions: 'Укажите длину, ширину и высоту самого крупного места с единицами измерения.',
+    pieceCount: 'Сколько всего грузовых мест?',
     contact: 'Как с вами связаться?'
   };
   const clean = Object.fromEntries(Object.keys(questions).map(k => [k, typeof input[k] === 'string' ? input[k].trim() : '']));
-  for (const key of Object.keys(questions)) if (!clean[key]) missing.push(key);
+  for (const key of Object.keys(questions)) {
+    if (key==='pickup'||key==='dropoff') {
+      if (!clean[key] || typeof input[key+'Street']!=='string' || !input[key+'Street'].trim() || typeof input[key+'House']!=='string' || !input[key+'House'].trim()) missing.push(key);
+    } else if (key==='dimensions') {
+      if (!['lengthCm','widthCm','heightCm'].every(k=>typeof input[k]==='number'&&Number.isFinite(input[k])&&input[k]>0)) missing.push(key);
+    } else if (key==='pieceCount') {
+      if (!Number.isSafeInteger(input.pieceCount)||input.pieceCount<1) missing.push(key);
+    } else if (!clean[key]) missing.push(key);
+  }
+  if (!missing.includes('dimensions')) clean.dimensions=input.lengthCm+' × '+input.widthCm+' × '+input.heightCm+' см';
+  clean.pieceCount=Number.isSafeInteger(input.pieceCount)&&input.pieceCount>0?input.pieceCount:null;
   const reasons = [];
   let suggestedVehicle = null;
   const value = input.weightKg;

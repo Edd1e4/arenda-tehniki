@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {extractIntake,validateMessages,composeReply} from './claude.mjs';
 import {createHandler} from './server.mjs';
 const message=[{role:'user',content:'Перевезти коробки'}];
-const extracted={cargo:'Коробки',pickup:'Учебный адрес А',dropoff:'Учебный адрес Б',date:'2026-11-01',time:'09:00',dimensions:'8 коробок 60×40×30',contact:'Учебный контакт',zone:'inside_mkad_outside_garden',requestedVehicle:null,weightKg:300,needsHuman:false};
+const extracted={pickupStreet:'Учебная улица',pickupHouse:'1',dropoffStreet:'Учебная улица',dropoffHouse:'2',lengthCm:60,widthCm:40,heightCm:30,pieceCount:8,cargo:'Коробки',pickup:'Учебный адрес А',dropoff:'Учебный адрес Б',date:'2026-11-01',time:'09:00',dimensions:'8 коробок 60×40×30',contact:'Учебный контакт',zone:'inside_mkad_outside_garden',requestedVehicle:null,weightKg:300,needsHuman:false};
 test('extracts data and enforces independent zone check',async()=>{
  const result=await extractIntake(message,{apiKey:'test-only',model:'test-model',today:'2026-10-26',fetchImpl:async(url,opts)=>{
  assert.equal(url,'https://api.anthropic.com/v1/messages');assert.equal(opts.headers['x-api-key'],'test-only');
@@ -59,3 +59,12 @@ test('request handler refuses absent credentials with useful error',async()=>{
  });
 });
 test('request handler serves local chat page',async()=>{await withServer({},async (url,request)=>{const r=await request(url);assert.equal(r.status,200);assert.match(await r.text(),/пробный ИИ-диспетчер/);});});
+
+test('adapter preserves unknown third dimension and incomplete address',async()=>{
+ const input={...extracted,pickup:'Химки',pickupStreet:null,pickupHouse:null,heightCm:null};
+ const r=await extractIntake(message,{apiKey:'test',model:'test',today:'2026-10-26',fetchImpl:async()=>({ok:true,json:async()=>({stop_reason:'end_turn',content:[{type:'text',text:JSON.stringify(input)}]})})});
+ assert.equal(r.heightCm,null);assert.equal(r.pickupStreet,'');
+});
+test('adapter rejects invalid extracted piece count',async()=>{
+ await assert.rejects(extractIntake(message,{apiKey:'test',model:'test',today:'2026-10-26',fetchImpl:async()=>({ok:true,json:async()=>({stop_reason:'end_turn',content:[{type:'text',text:JSON.stringify({...extracted,pieceCount:1.5})}]})})}),/invalid_response/);
+});

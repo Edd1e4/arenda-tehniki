@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { reviewIntake } from './intake.mjs';
-const base={cargo:'Коробки',pickup:'Адрес А',dropoff:'Адрес Б',date:'2026-11-01',time:'09:00',dimensions:'10 мест, самое крупное 60×40×30 см',contact:'Учебный контакт',weightKg:400,zone:'inside_mkad_outside_garden'};
+const base={pickupStreet:'Учебная улица',pickupHouse:'1',dropoffStreet:'Учебная улица',dropoffHouse:'2',lengthCm:60,widthCm:40,heightCm:30,pieceCount:10,cargo:'Коробки',pickup:'Адрес А',dropoff:'Адрес Б',date:'2026-11-01',time:'09:00',dimensions:'10 мест, самое крупное 60×40×30 см',contact:'Учебный контакт',weightKg:400,zone:'inside_mkad_outside_garden'};
 const run=(patch={})=>reviewIntake({...base,...patch},{today:'2026-10-26'});
 test('500 kg limit selects provisional Caddy',()=>assert.equal(run({weightKg:500}).suggestedVehicle,'Volkswagen Caddy'));
 test('501 kg selects provisional Transit',()=>assert.equal(run({weightKg:501}).suggestedVehicle,'Ford Transit'));
@@ -17,3 +17,10 @@ test('invalid and past dates require correction',()=>{for(const date of ['2026-0
 test('human request is honoured',()=>assert.ok(run({needsHuman:true}).reasons.includes('customer_requests_human')));
 test('special machinery is routed to human',()=>assert.ok(run({requestedVehicle:'Bobcat S185'}).reasons.includes('special_equipment')));
 test('quote readiness never confirms booking price or SMS',()=>{const r=run();assert.equal(r.price,null);assert.equal(r.bookingConfirmed,false);assert.equal(r.smsSent,false);assert.equal(r.requiresHumanConfirmation,true);assert.ok(r.checksPending.includes('cargo_dimensions_fit'));});
+
+test('city-only pickup requires street and building before contact',()=>{const r=run({pickup:'Химки',pickupStreet:'',pickupHouse:'',contact:''});assert.equal(r.missing[0],'pickup');assert.match(r.nextQuestion,/точный адрес погрузки/);});
+test('city-only destination requires exact address',()=>assert.ok(run({dropoff:'Москва',dropoffStreet:null,dropoffHouse:null}).missing.includes('dropoff')));
+test('two dimensions never count as complete',()=>{const r=run({dimensions:'1м*1м',lengthCm:100,widthCm:100,heightCm:null,contact:''});assert.ok(r.missing.includes('dimensions'));assert.match(r.nextQuestion,/высоту/);});
+test('all sizes but missing piece count asks count',()=>{const r=run({pieceCount:null,contact:''});assert.equal(r.missing[0],'pieceCount');assert.match(r.nextQuestion,/Сколько/);});
+test('invalid sizes and counts are not ready',()=>{for(const patch of [{heightCm:0},{lengthCm:Infinity},{widthCm:'40'},{pieceCount:1.5},{pieceCount:-1}])assert.notEqual(run(patch).status,'ready_for_quote');});
+test('structured dimensions show normalized units',()=>{const r=run({lengthCm:100,widthCm:100,heightCm:120,pieceCount:8});assert.equal(r.summary.dimensions,'100 × 100 × 120 см');assert.equal(r.summary.pieceCount,8);});
