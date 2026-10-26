@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Аренда24 МО — пробная заявка</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#f4f5ef;color:#20352c;font:17px/1.55 system-ui,sans-serif}main{max-width:820px;margin:auto;padding:30px 20px}h1{font-size:clamp(28px,5vw,42px);line-height:1.15}.notice{padding:16px;background:#e8ecd9;border-radius:12px}.message{padding:15px 18px;border-radius:14px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}.bot{background:white;border:1px solid #d4dcce;margin-right:8%}.user{background:#d9ed80;margin-left:8%}.bar{display:flex;gap:10px;flex-wrap:wrap}input,select,button{font:inherit;border-radius:8px;padding:12px;border:1px solid #899c8b}input,select{width:100%;margin:8px 0 14px}button{cursor:pointer;background:#d9ed80;color:#20352c}button.secondary{background:white}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #527524;outline-offset:3px}[hidden]{display:none!important}pre{white-space:pre-wrap;font:inherit;background:white;padding:20px;border:1px solid #d4dcce;border-radius:12px}small{color:#4a6050}label{font-weight:600}#error{color:#983b20}</style></head>
+<body><main><p>АРЕНДА24 МО · Проверка сценария</p><h1>Попробуйте оформить перевозку</h1>
+<p class="notice">Это пошаговый тест без ИИ. Ответы обрабатываются только на этой странице, не сохраняются после закрытия и никому не отправляются. Используйте учебные данные. Заказ не создаётся.</p>
+<div id="messages" role="log" aria-label="История пробной заявки"></div>
+<form id="form"><small id="progress"></small><label id="label" for="answer"></label><div id="field"></div><p id="error" role="alert"></p><div class="bar"><button type="submit">Продолжить</button><button type="button" id="back" class="secondary">Назад</button></div></form>
+<section id="summary" hidden><h2>Черновик для расчёта</h2><p id="verdict" role="status"></p><pre id="details"></pre><p>Цена и наличие машины не подтверждены. Заявка не отправлена, бронирование и СМС не выполнялись.</p><button type="button" id="edit">Изменить ответы</button></section>
+<p><button type="button" id="reset" class="secondary">Начать заново</button></p></main>
+<script>
+// Pure intake checks. No model, network, storage, booking or SMS side effects.
+function reviewIntake(input = {}, { today } = {}) {
+  const missing = [];
+  const questions = {
+    cargo: 'Что нужно перевезти?',
+    pickup: 'Откуда забрать груз?',
+    dropoff: 'Куда доставить груз?',
+    date: 'На какую дату нужна машина?',
+    time: 'К какому времени нужна подача по Москве?',
+    dimensions: 'Какие размеры самого крупного места и сколько мест?',
+    contact: 'Как с вами связаться?'
+  };
+  const clean = Object.fromEntries(Object.keys(questions).map(k => [k, typeof input[k] === 'string' ? input[k].trim() : '']));
+  for (const key of Object.keys(questions)) if (!clean[key]) missing.push(key);
+  const reasons = [];
+  let suggestedVehicle = null;
+  const value = input.weightKg;
+  const weight = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value.replace(',', '.')) : NaN;
+  if (!Number.isFinite(weight) || weight <= 0) {
+    missing.push('weightKg');
+    questions.weightKg = 'Какой общий вес груза? Если неизвестен, уточним с человеком.';
+  } else if (weight > 2000) {
+    reasons.push('over_capacity');
+  } else {
+    suggestedVehicle = weight <= 500 ? 'Volkswagen Caddy' : 'Ford Transit';
+  }
+  if (input.requestedVehicle === 'Volkswagen Caddy' && weight > 500) reasons.push('caddy_over_capacity');
+  if (input.requestedVehicle === 'Ford Transit' && weight > 2000 && !reasons.includes('over_capacity')) reasons.push('over_capacity');
+  if (input.requestedVehicle && !['Volkswagen Caddy', 'Ford Transit'].includes(input.requestedVehicle)) reasons.push('special_equipment');
+  if (!['inside_mkad_outside_garden', 'region_within_50km'].includes(input.zone)) reasons.push('route_needs_review');
+  if (input.needsHuman === true) reasons.push('customer_requests_human');
+  if (clean.date) {
+    const valid = /^\d{4}-\d{2}-\d{2}$/.test(clean.date) && !Number.isNaN(Date.parse(clean.date+'T00:00:00Z')) && new Date(clean.date+'T00:00:00Z').toISOString().slice(0,10) === clean.date;
+    if (!valid || (today && clean.date < today)) {
+      if (!missing.includes('date')) missing.push('date');
+      questions.date = 'Уточните корректную дату подачи, не раньше сегодняшнего дня.';
+    }
+  }
+  if (clean.time) {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(clean.time)) {
+      missing.push('time'); questions.time = 'Уточните время в формате часы:минуты.';
+    } else if (clean.time < '08:00' || clean.time >= '18:00') reasons.push('outside_work_hours');
+  }
+  // A weight match is provisional: vehicle geometry and availability are not known.
+  const status = reasons.length ? 'human_review' : missing.length ? 'needs_details' : 'ready_for_quote';
+  return {
+    status, missing, reasons, suggestedVehicle,
+    nextQuestion: missing.length ? questions[missing[0]] : null,
+    requiresHumanConfirmation: true,
+    price: null, bookingConfirmed: false, smsSent: false,
+    checksPending: ['cargo_dimensions_fit', 'route_and_access', 'availability', 'final_price'],
+    summary: { ...clean, weightKg: Number.isFinite(weight) && weight > 0 ? weight : null }
+  };
+}
+
+const steps=[
+['cargo','Что нужно перевезти?','text','Например: 8 коробок'],
+['weightKg','Какой общий вес в килограммах?','text','Например: 300. Если неизвестен — «не знаю»'],
+['dimensions','Сколько мест и какие размеры самого крупного?','text','Например: 8 мест, 60 × 40 × 30 см'],
+['pickup','Откуда забрать груз?','text','Учебный адрес погрузки'],
+['dropoff','Куда доставить груз?','text','Учебный адрес доставки'],
+['zone','Какую зону охватывает весь маршрут?','select',''],
+['date','На какую дату нужна машина?','date',''],
+['time','Во сколько подать машину по Москве?','time',''],
+['contact','Как связаться для расчёта?','text','Для теста напишите «учебный контакт»']
+];
+const zones=[['inside_mkad_outside_garden','Весь маршрут в Москве между МКАД и Садовым кольцом'],['region_within_50km','Москва в указанной зоне и область до 50 км от МКАД'],['other','Другой маршрут или не уверен']];
+const answers={};let step=0;
+const byId=id=>document.getElementById(id);
+function today(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
+function show(){
+ byId('form').hidden=false;byId('summary').hidden=true;byId('error').textContent='';
+ const messages=byId('messages');messages.replaceChildren();
+ for(let i=0;i<step;i++){const [key,q]=steps[i];for(const [cls,text] of [['bot',q],['user',key==='zone'?(zones.find(z=>z[0]===answers[key])?.[1]||answers[key]):answers[key]]]){const p=document.createElement('p');p.className='message '+cls;p.textContent=text;messages.append(p);}}
+ const [key,q,type,placeholder]=steps[step];
+ byId('label').textContent=q;byId('progress').textContent='Вопрос '+(step+1)+' из '+steps.length+' · ';
+ const input=document.createElement(type==='select'?'select':'input');input.id='answer';input.required=true;
+ if(type==='select'){for(const [value,text] of zones){const option=document.createElement('option');option.value=value;option.textContent=text;input.append(option);}}
+ else {input.type=type;input.placeholder=placeholder;if(type==='date')input.min=today();}
+ input.value=answers[key]|| (type==='select'?'other':'');byId('field').replaceChildren(input);byId('back').disabled=step===0;input.focus();
+}
+function finish(){
+ const result=reviewIntake(answers,{today:today()});
+ byId('form').hidden=true;byId('summary').hidden=false;
+ const vehicle=result.suggestedVehicle ? 'Кандидат по весу: '+result.suggestedVehicle+'. Габариты и доступность ещё нужно проверить.' : 'Автомобиль должен подобрать диспетчер.';
+ const notes={over_capacity:'Вес больше 2 т.',route_needs_review:'Маршрут требует проверки человеком.',outside_work_hours:'Время вне рабочего окна 08:00–18:00.'};
+ const missing=result.missing.length?' Нужно уточнить: '+result.missing.map(k=>steps.find(s=>s[0]===k)?.[1]||k).join(' '):'';
+ byId('verdict').textContent=vehicle+' '+result.reasons.map(r=>notes[r]||'Нужно согласование с человеком.').join(' ')+missing;
+ byId('details').textContent=steps.map(([key,q])=>q+'\n'+(key==='zone'?zones.find(z=>z[0]===answers[key])?.[1]:answers[key])).join('\n\n');
+}
+byId('form').addEventListener('submit',event=>{
+ event.preventDefault();const input=byId('answer'),v=input.value.trim();if(!v)return;
+ const key=steps[step][0];
+ if(key==='weightKg'&&!/^(не знаю|неизвестно)$/i.test(v)&&(!Number.isFinite(Number(v.replace(',','.')))||Number(v.replace(',','.'))<=0)){byId('error').textContent='Введите вес числом больше нуля или напишите «не знаю».';return;}
+ if(key==='date'){const d=new Date(v+'T00:00:00Z');if(Number.isNaN(d.valueOf())||d.toISOString().slice(0,10)!==v||v<today()){byId('error').textContent='Укажите корректную дату не раньше сегодняшнего дня.';return;}}
+ answers[key]=v;step++;if(step===steps.length){finish();}else{show();}
+});
+byId('back').addEventListener('click',()=>{if(step>0)step--;show();});
+byId('edit').addEventListener('click',()=>{step=0;show();});
+byId('reset').addEventListener('click',()=>{for(const k of Object.keys(answers))delete answers[k];step=0;show();});
+show();
+</script></body></html>
