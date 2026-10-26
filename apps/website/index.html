@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Аренда техники — Москва и область</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f4ef;color:#182b25;font:17px/1.6 system-ui,sans-serif}header,main,footer{max-width:1140px;margin:auto;padding:28px}header{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}a{color:inherit}section{padding:35px 0}h1{font-size:clamp(36px,6vw,68px);line-height:1.1;max-width:850px}h2{font-size:30px}.tag{font-size:14px;letter-spacing:2px;text-transform:uppercase}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}.card,form{padding:26px;border:1px solid #d6dcd2;border-radius:18px;background:white}.button,button{display:inline-block;padding:14px 24px;background:#d9ed80;color:#182b25;border:0;border-radius:8px;font:inherit;text-decoration:none;cursor:pointer}label{display:block;margin:14px 0}input,select,textarea{display:block;width:100%;padding:12px;font:inherit;border:1px solid #a7b3aa;border-radius:6px}small{display:block}footer{border-top:1px solid #ccd4c9}.muted{color:#506358}
+</style>
+<header><strong>АРЕНДА ТЕХНИКИ</strong><span>Москва и область · 08:00–18:00</span><a href="#catalog">Каталог</a></header>
+<main>
+<section><p class="tag">Перевезти · Поднять · Построить</p><h1>Техника под вашу задачу.<br>От доставки до земляных работ.</h1><p>Москва до Садового кольца и область до 50 км от МКАД.</p><p class="muted">Подбираем технику и рассчитываем стоимость индивидуально.</p><a class="button" href="#request">Подобрать технику</a></section>
+<section id="catalog"><h2>Наш парк</h2><div class="grid">
+<article class="card"><h3>Ford Transit</h3><p>Грузоподъёмность до 2 т</p><p>Доставка грузов и перевозки.</p></article>
+<article class="card"><h3>Volkswagen Caddy</h3><p>Грузоподъёмность до 500 кг</p><p>Компактные грузы и небольшие доставки.</p></article>
+<article class="card"><h3>Манипулятор</h3><p>Автомобиль 15 т · КМУ 5 т / 12 м</p><p>Перевозка и погрузка. Допустимый вес на нужном вылете уточняется по грузовой характеристике.</p></article>
+<article class="card"><h3>Экскаваторы</h3><p>Земляные работы</p><p>Модель и оборудование подбираются под задачу.</p></article>
+<article class="card"><h3>Мини-погрузчики</h3><p>Погрузка и планировка</p><p>Габариты и навесное оборудование уточняются при расчёте.</p></article>
+</div></section>
+<section id="request"><h2>Расскажите о задаче</h2><p>Демонстрационная форма: данные не отправляются и не сохраняются. Приём заказов ещё не подключён.</p>
+<form id="form"><label>Техника<select name="equipment"><option>Нужна помощь с выбором</option><option>Ford Transit</option><option>Volkswagen Caddy</option><option>Манипулятор</option><option>Экскаватор</option><option>Мини-погрузчик</option></select></label>
+<label>Адрес работ<input name="address" required maxlength="300" autocomplete="street-address"></label>
+<label>Желаемая дата<input name="date" type="date" required></label>
+<label>Что нужно сделать<textarea name="task" required maxlength="2000" rows="4" placeholder="Груз, вес, размеры, длительность, условия подъезда"></textarea></label>
+<button type="submit">Проверить заполнение</button><p id="result" role="status" aria-live="polite"></p></form></section>
+<section><h2>Как проходит заказ</h2><p>Заявка → уточнение условий → расчёт и согласование стоимости → подтверждение заказа. СМС-подтверждение появится после подключения сервиса.</p></section>
+</main><footer>Аренда техники · Москва и область · 08:00–18:00</footer>
+<script>document.getElementById('form').addEventListener('submit',function(event){event.preventDefault();document.getElementById('result').textContent='Поля заполнены. Это демонстрация: заявка не отправлена. Связь с диспетчером будет подключена позже.';});</script>
+</html>
