@@ -1,7 +1,7 @@
 import test from 'node:test';
 import {Readable} from 'node:stream';
 import assert from 'node:assert/strict';
-import {extractIntake,validateMessages,composeReply} from './claude.mjs';
+import {extractIntake,validateMessages,composeReply,extractionSchema} from './claude.mjs';
 import {createHandler} from './server.mjs';
 const message=[{role:'user',content:'Перевезти коробки'}];
 const extracted={pickupStreet:'Учебная улица',pickupHouse:'1',dropoffStreet:'Учебная улица',dropoffHouse:'2',lengthCm:60,widthCm:40,heightCm:30,pieceCount:8,cargo:'Коробки',pickup:'Учебный адрес А',dropoff:'Учебный адрес Б',date:'2026-11-01',time:'09:00',dimensions:'8 коробок 60×40×30',contact:'Учебный контакт',zone:'inside_mkad_outside_garden',requestedVehicle:null,weightKg:300,needsHuman:false};
@@ -67,4 +67,22 @@ test('adapter preserves unknown third dimension and incomplete address',async()=
 });
 test('adapter rejects invalid extracted piece count',async()=>{
  await assert.rejects(extractIntake(message,{apiKey:'test',model:'test',today:'2026-10-26',fetchImpl:async()=>({ok:true,json:async()=>({stop_reason:'end_turn',content:[{type:'text',text:JSON.stringify({...extracted,pieceCount:1.5})}]})})}),/invalid_response/);
+});
+
+test('request schema stays below Claude union limit',()=>{
+ const unionCount=Object.values(extractionSchema.properties).filter(v=>Array.isArray(v.type)||v.anyOf).length;
+ assert.equal(unionCount,5);assert.ok(unionCount<=16);
+ for(const key of ['pickup','dropoff','pickupStreet','pickupHouse','dropoffStreet','dropoffHouse'])assert.equal(extractionSchema.properties[key].type,'string');
+ assert.equal(extractionSchema.additionalProperties,false);
+});
+test('unknown string fields use empty strings and numbers stay null',async()=>{
+ const input={...extracted,pickupStreet:'',pickupHouse:'',heightCm:null};
+ const r=await extractIntake(message,{apiKey:'test',model:'test',today:'2026-10-26',fetchImpl:async()=>({ok:true,json:async()=>({stop_reason:'end_turn',content:[{type:'text',text:JSON.stringify(input)}]})})});
+ assert.equal(r.pickupStreet,'');assert.equal(r.heightCm,null);
+});
+test('schema compilation errors have a distinct safe error',async()=>{
+ await assert.rejects(extractIntake(message,{apiKey:'test',model:'test',fetchImpl:async()=>({ok:false,status:400,json:async()=>({error:{message:'Schema is too complex for compilation.'}})})}),/schema_complexity/);
+});
+test('low credit errors are distinguished from model configuration',async()=>{
+ await assert.rejects(extractIntake(message,{apiKey:'test',model:'test',fetchImpl:async()=>({ok:false,status:400,json:async()=>({error:{message:'Your credit balance is too low to access the Anthropic API.'}})})}),/insufficient_balance/);
 });
