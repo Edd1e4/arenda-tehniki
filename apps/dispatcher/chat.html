@@ -1,0 +1,23 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Аренда24 МО — пробный ИИ-диспетчер</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f4f5ef;color:#20352c;font:17px/1.55 system-ui,sans-serif}main{max-width:820px;margin:auto;padding:24px}h1{font-size:36px}.notice,.message,pre{padding:16px;border-radius:12px;background:white;white-space:pre-wrap;overflow-wrap:anywhere}.notice{background:#e7edcd}.user{background:#d9ed80;margin-left:8%}.assistant{margin-right:8%}textarea{width:100%;padding:14px;font:inherit;border:1px solid #899c8b;border-radius:8px}button{font:inherit;padding:12px 18px;background:#d9ed80;color:#20352c;border:1px solid #899c8b;border-radius:8px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}#error{color:#993e20}label{display:block;margin:12px 0}#draft[hidden]{display:none}button:focus-visible,textarea:focus-visible{outline:3px solid #527524;outline-offset:3px}
+</style></head><body><main><p>АРЕНДА24 МО · Локальный тест Claude</p><h1>Расскажите о перевозке</h1><p class="notice">Это тест ИИ. При отправке текст диалога передаётся в Claude (Anthropic), запросы оплачиваются с вашего API-аккаунта. Используйте учебные адреса и контакты. Заявки и СМС не отправляются. История хранится в памяти вкладки до закрытия или сброса.</p><div id="messages" role="log" aria-label="Диалог"></div><form id="form"><label for="message">Ваше сообщение</label><textarea id="message" required maxlength="4000" rows="3" placeholder="Например: завтра нужно перевезти 8 коробок из Химок в Москву, общий вес 300 кг"></textarea><p id="error" role="alert"></p><button id="submit" type="submit">Отправить в Claude</button> <button id="reset" type="button">Начать заново</button></form><p id="status" role="status" aria-live="polite"></p><section id="draft" hidden><h2>Данные из разговора — проверьте</h2><pre id="summary"></pre></section></main><script>
+const history=[];const get=id=>document.getElementById(id);
+function add(role,content){const p=document.createElement('p');p.className='message '+role;p.textContent=content;get('messages').append(p);}
+function reset(){history.length=0;get('messages').replaceChildren();get('draft').hidden=true;get('summary').textContent='';get('error').textContent='';get('status').textContent='';get('message').value='';add('assistant','Здравствуйте! Я ИИ-помощник Аренда24 МО. Что нужно перевезти?');}
+get('reset').onclick=reset;
+get('form').onsubmit=async event=>{
+ event.preventDefault();const content=get('message').value.trim();if(!content)return;
+ if(history.length>=24){get('error').textContent='Тестовый диалог достиг лимита. Начните заново.';return;}
+ get('submit').disabled=true;get('reset').disabled=true;get('error').textContent='';get('status').textContent='Claude обрабатывает сообщение…';
+ try{
+ const response=await fetch('/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages:[...history,{role:'user',content}]})});
+ const data=await response.json();if(!response.ok)throw new Error(data.error||'Ошибка сервера.');
+ history.push({role:'user',content},{role:'assistant',content:data.reply});add('user',content);add('assistant',data.reply);get('message').value='';
+ const labels={cargo:'Груз',pickup:'Откуда',dropoff:'Куда',date:'Дата',time:'Время (Москва)',dimensions:'Размеры и места',contact:'Контакт',weightKg:'Вес, кг'};
+ get('summary').textContent=Object.entries(labels).map(([key,label])=>label+': '+(data.summary[key]??'не уточнено')).join('\n')+'\nКандидат по весу: '+(data.suggestedVehicle||'не определён')+'\nМаршрут, габариты, цена и наличие требуют проверки человеком.';
+ get('draft').hidden=false;get('status').textContent='Ответ получен. Заявка не отправлена.';
+ }catch(e){get('error').textContent=e.message;get('status').textContent='Ответ не получен. Текст сохранён в поле — можно повторить.';}
+ finally{get('submit').disabled=false;get('reset').disabled=false;get('message').focus();}
+};
+reset();
+</script></body></html>
