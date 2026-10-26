@@ -14,7 +14,7 @@ export function createTelegramApi(token,{fetchImpl=fetch,signal}={}){
   return d.result;
  };
 }
-async function run(){
+export async function runTelegram(){
  const token=(process.env.TELEGRAM_BOT_TOKEN||'').trim();
  const abort=new AbortController();process.once('SIGINT',()=>abort.abort());
  const api=createTelegramApi(token,{signal:abort.signal});
@@ -53,4 +53,5 @@ async function run(){
  }
 }
 const errors={token_missing:'В файле .env.telegram нет корректного токена.',token_invalid:'Telegram не принял токен. Проверьте его в .env.telegram.',telegram_conflict:'Бот уже запущен в другом окне или сервисе. Остановите вторую копию.',telegram_network:'Нет связи с Telegram. Проверьте интернет.',telegram_api:'Telegram отклонил запрос. Проверьте токен и доступность сервиса.',dispatcher_unavailable:'Сначала запустите локальный диспетчер на порту 4388 и оставьте его окно открытым.',webhook_exists:'У этого бота уже есть другое подключение. Оно не изменено; сначала уточните, где бот используется.',state_invalid:'Не удалось прочитать настройки личного теста или токен относится к другому боту. Файл состояния не изменён.',state_write:'Не удалось сохранить настройки подключения.'};
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){run().catch(e=>{console.error(errors[e.message]||'Не удалось запустить Telegram. Настройки и токен не выводятся.');process.exitCode=1;});}
+export function telegramErrorMessage(error){return errors[error?.message]||'Не удалось подключить Telegram. Токен и настройки не выводятся.';}
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){runTelegram().catch(e=>{console.error(errors[e.message]||'Не удалось запустить Telegram. Настройки и токен не выводятся.');process.exitCode=1;});}
