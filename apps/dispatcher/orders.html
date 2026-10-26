@@ -1,0 +1,42 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Аренда24 МО — журнал заявок</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f4f5ef;color:#20352c;font:16px/1.5 system-ui,sans-serif}main{max-width:1150px;margin:auto;padding:24px}h1{font-size:36px}.layout{display:grid;grid-template-columns:minmax(260px,1fr) minmax(300px,1.3fr);gap:24px}.panel{padding:20px;background:white;border:1px solid #d5ddce;border-radius:14px}.order{display:block;width:100%;text-align:left;margin:10px 0;background:white}.order[aria-current=true]{border:2px solid #527524}button,input,select,textarea{font:inherit;border:1px solid #899c8b;border-radius:8px;padding:11px}button{background:#d9ed80;cursor:pointer;color:#20352c}input:not([type=checkbox]),select,textarea{width:100%;margin:5px 0 12px}label{display:block}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}#error{color:#983b20}.note{padding:14px;background:#e7edcd;border-radius:10px}.checks label{margin:12px 0}button:focus-visible,a:focus-visible{outline:3px solid #527524;outline-offset:3px}@media(max-width:720px){.layout{grid-template-columns:1fr}main{padding:16px}}[hidden]{display:none!important}</style></head><body><main>
+<p>АРЕНДА24 МО · Локальный журнал</p><a href="/">← К диспетчеру</a><h1>Заявки на перевозку</h1><p class="note">Данные хранятся на этом компьютере. Доступ — через локальный сервер, без отдельного пароля. Отметки и стоимость в журнале не отправляются клиенту; СМС не подключены.</p><p id="error" role="alert"></p><div class="layout"><section class="panel"><label for="filter">Статус</label><select id="filter"><option value="">Все заявки</option></select><button id="refresh">Обновить</button><p id="count" role="status"></p><div id="list"></div></section>
+<section class="panel"><p id="empty">Выберите заявку из списка. Новую можно сохранить после диалога с диспетчером.</p><form id="editor" hidden><h2 id="title"></h2><p id="created"></p><pre id="summary"></pre><label>Техника<select id="vehicle"><option value="">Выберите технику</option><option>Ford Transit</option><option>Volkswagen Caddy</option><option>Манипулятор</option><option>JCB 3CX</option><option>Bobcat S185</option></select></label><label>Итоговая стоимость, ₽<input id="price" type="number" min="1" max="100000000" step="1" inputmode="numeric"></label><label>Статус<select id="state"></select></label><label>Примечание<textarea id="notes" maxlength="2000" rows="4" placeholder="Что включено в стоимость, доставка, условия доступа"></textarea></label><div class="checks"><label><input id="agreed" type="checkbox"> Клиент согласовал стоимость и условия</label><label><input id="checked" type="checkbox"> Проверены маршрут, габариты, доступ и наличие техники</label></div><p>Для статуса «Подтверждена» нужны цена, техника и обе отметки. Если цена или техника меняются, сначала верните заявку в статус «Рассчитана» и согласуйте заново.</p><button id="save" type="submit">Сохранить изменения</button><p id="result" role="status"></p></form></section></div></main><script>
+const get=id=>document.getElementById(id);
+const labels={new:'Новая',quoted:'Рассчитана',confirmed:'Подтверждена',completed:'Выполнена',cancelled:'Отменена'};
+const transitions={new:['new','quoted','cancelled'],quoted:['quoted','confirmed','cancelled'],confirmed:['confirmed','quoted','completed','cancelled'],completed:['completed'],cancelled:['cancelled']};
+let orders=[],selected=null;
+for(const [value,label]of Object.entries(labels)){const o=document.createElement('option');o.value=value;o.textContent=label;get('filter').append(o);}
+function list(){
+ const filtered=orders.filter(o=>!get('filter').value||o.status===get('filter').value);
+ get('count').textContent=filtered.length?'Заявок: '+filtered.length:'Заявок пока нет.';
+ get('list').replaceChildren();
+ for(const o of filtered){
+ const b=document.createElement('button');b.className='order';b.type='button';b.setAttribute('aria-current',String(o.id===selected?.id));b.textContent=o.id+' · '+labels[o.status]+'\n'+o.summary.pickup+' → '+o.summary.dropoff+'\n'+(o.priceRub?o.priceRub.toLocaleString('ru-RU')+' ₽':'Стоимость не указана');b.onclick=()=>edit(o);get('list').append(b);
+ }
+}
+function edit(order){
+ selected=order;get('empty').hidden=true;get('editor').hidden=false;get('result').textContent='';
+ get('title').textContent='Заявка '+order.id;
+ get('created').textContent='Создана '+new Date(order.createdAt).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})+' (Москва)';
+ const fields={cargo:'Груз',pickup:'Погрузка',dropoff:'Доставка',date:'Дата',time:'Время',dimensions:'Размеры крупнейшего места',pieceCount:'Количество мест',weightKg:'Общий вес, кг',contact:'Контакт'};
+ get('summary').textContent=Object.entries(fields).map(([k,label])=>label+': '+(order.summary[k]||'не уточнено')).join('\n')+'\nКандидат по весу: '+(order.suggestedVehicle||'не определён');
+ get('vehicle').value=order.vehicle;get('price').value=order.priceRub??'';get('notes').value=order.notes;
+ get('agreed').checked=order.customerAgreed;get('checked').checked=order.conditionsChecked;
+ get('state').replaceChildren();for(const value of transitions[order.status]){const o=document.createElement('option');o.value=value;o.textContent=labels[value];get('state').append(o);}get('state').value=order.status;list();
+}
+async function refresh(){
+ get('error').textContent='';try{const r=await fetch('/api/orders');const d=await r.json();if(!r.ok)throw Error(d.error);orders=d.orders;
+ const previous=selected;list();if(previous){const current=orders.find(o=>o.id===previous.id);if(current)edit(current);}
+ }catch(e){get('error').textContent=e.message||'Журнал недоступен.';}
+}
+get('refresh').onclick=refresh;get('filter').onchange=list;
+get('editor').onsubmit=async e=>{
+ e.preventDefault();if(!selected)return;get('save').disabled=true;get('result').textContent='';
+ try{const body={revision:selected.revision,status:get('state').value,vehicle:get('vehicle').value,priceRub:get('price').value===''?null:Number(get('price').value),notes:get('notes').value,customerAgreed:get('agreed').checked,conditionsChecked:get('checked').checked};
+ const r=await fetch('/api/orders/'+selected.id,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw Error(d.error||'Ошибка сохранения.');
+ orders=orders.map(o=>o.id===d.order.id?d.order:o);edit(d.order);get('result').textContent='Изменения сохранены. Клиенту ничего не отправлено.';
+ }catch(e){get('result').textContent=e.message;}finally{get('save').disabled=false;}
+};
+refresh();
+</script></body></html>
