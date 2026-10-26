@@ -1,0 +1,35 @@
+[Unit]
+Description=Arenda24 MO dispatcher and private order journal
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=arenda24mo
+Group=arenda24mo
+WorkingDirectory=/opt/arenda24mo/app
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=45
+KillSignal=SIGINT
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ReadWritePaths=/var/lib/arenda24mo
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+StandardOutput=journal
+StandardError=journal
+EnvironmentFile=/etc/arenda24mo/claude.env
+Environment=PORT=4388
+ExecStart=/usr/bin/node /opt/arenda24mo/app/server.mjs
+
+[Install]
+WantedBy=multi-user.target
