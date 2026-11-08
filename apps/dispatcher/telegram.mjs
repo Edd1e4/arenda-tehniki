@@ -4,11 +4,12 @@ import {randomBytes,randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 import {createAssistantController,createAssistantReply,parseTelegramIds} from './assistant.mjs';
+import {createProcurementController} from './procurement.mjs';
 import {createTelegramController} from './telegram-core.mjs';
 export function createTelegramApi(token,{fetchImpl=fetch,signal}={}){
  if(!/^\d+:[A-Za-z0-9_-]{20,}$/.test(token||''))throw Error('token_missing');
  return async(method,body={})=>{
-  if(!['getMe','getUpdates','getWebhookInfo','sendMessage','answerCallbackQuery'].includes(method))throw Error('method_forbidden');
+  if(!['getMe','getUpdates','getWebhookInfo','sendMessage','sendPhoto','sendDocument','answerCallbackQuery'].includes(method))throw Error('method_forbidden');
   let r;try{r=await fetchImpl('https://api.telegram.org/bot'+token+'/'+method,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(40000)]):AbortSignal.timeout(40000)});}catch{throw Error('telegram_network');}
   let d;try{d=await r.json();}catch{throw Error('telegram_network');}
   if(!r.ok||!d.ok)throw Error(d.error_code===401?'token_invalid':d.error_code===409?'telegram_conflict':'telegram_api');
@@ -20,12 +21,14 @@ export async function runTelegram(){
  const abort=new AbortController();process.once('SIGINT',()=>abort.abort());
  const api=createTelegramApi(token,{signal:abort.signal});
  const assistantMode=process.env.TELEGRAM_MODE==='assistant';
+ const procurementMode=process.env.TELEGRAM_MODE==='procurement';
+ const standalone=assistantMode||procurementMode;
  const base='http://127.0.0.1:4388';
  async function dispatcher(path,body){
   let response;try{response=await fetch(base+path,{method:'POST',headers:{'content-type':'application/json',origin:base},body:JSON.stringify(body),signal:AbortSignal.timeout(40000)});}catch{throw Error('dispatcher_unavailable');}
   if(!response.ok)throw Error('dispatcher_unavailable');return response.json();
  }
- if(!assistantMode)try{const response=await fetch(base,{signal:AbortSignal.timeout(5000)});if(!response.ok)throw Error();}catch{throw Error('dispatcher_unavailable');}
+ if(!standalone)try{const response=await fetch(base,{signal:AbortSignal.timeout(5000)});if(!response.ok)throw Error();}catch{throw Error('dispatcher_unavailable');}
  const me=await api('getMe');const webhook=await api('getWebhookInfo');
  if(webhook.url)throw Error('webhook_exists');
  const statePath=new URL('./data/telegram-state.json',import.meta.url);
@@ -34,20 +37,25 @@ export async function runTelegram(){
  catch(e){if(e.code!=='ENOENT')throw Error('state_invalid');state={botId:me.id,offset:0,owner:null};}
  async function saveState(){await mkdir(dirname(fileURLToPath(statePath)),{recursive:true});const temp=fileURLToPath(statePath)+'.'+randomUUID()+'.tmp';await writeFile(temp,JSON.stringify(state),{mode:0o600,flag:'wx'});await rename(temp,statePath);}
  const code=randomBytes(12).toString('hex');
- const userIds=assistantMode?parseTelegramIds(process.env.ASSISTANT_USER_IDS):[];
- const groupIds=assistantMode?parseTelegramIds(process.env.ASSISTANT_GROUP_IDS):[];
+ const userIds=standalone?parseTelegramIds(process.env.ASSISTANT_USER_IDS):[];
+ const groupIds=standalone?parseTelegramIds(process.env.ASSISTANT_GROUP_IDS):[];
  if(assistantMode&&!state.owner&&!userIds.length)throw Error('assistant_settings_missing');
- const controller=assistantMode?createAssistantController({
+ const controller=procurementMode?await createProcurementController({
+  telegram:api,owner:state.owner,botUsername:me.username,userIds,groupIds,
+  journalDir:fileURLToPath(new URL('./data/procurement',import.meta.url)),
+ }):assistantMode?createAssistantController({
   telegram:api,state,botUsername:me.username,userIds,groupIds,
   reply:createAssistantReply({apiKey:process.env.OPENAI_API_KEY,model:process.env.OPENAI_MODEL,instructions:process.env.ASSISTANT_INSTRUCTIONS}),
  }):createTelegramController({state,saveState,telegram:api,dispatcher,pairCode:code});
  console.log('Бот: @'+me.username);
- if(assistantMode)console.log('Режим рабочего помощника включён.');
+ if(procurementMode)console.log('Журнал заявок включён.');
+ else if(assistantMode)console.log('Режим рабочего помощника включён.');
  else if(!state.owner){console.log('Откройте своего бота в Telegram и отправьте в течение 10 минут:');console.log('/start '+code);}
  else console.log('Личный тест подключён. Отправьте боту /new.');
- if(!assistantMode)console.log('Оба окна программ должны оставаться открытыми. Для остановки: Ctrl+C.');
+ if(!standalone)console.log('Оба окна программ должны оставаться открытыми. Для остановки: Ctrl+C.');
  while(!abort.signal.aborted){
   try{
+   await controller.flushNotifications?.();
    const updates=await api('getUpdates',{offset:state.offset,timeout:25,limit:20,allowed_updates:['message','callback_query']});
    for(const update of updates){
     if(abort.signal.aborted)break;
